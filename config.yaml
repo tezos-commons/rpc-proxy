@@ -1,0 +1,42 @@
+server:
+  port: 8080
+
+# Per-IP rate limits (requests per second).
+# Set to 0 or omit to use defaults.
+rate_limits:
+  default: 300    # read-only chain data
+  expensive: 20   # eth_call, eth_estimateGas, eth_getLogs, big_maps, raw context, preapply
+  injection: 10   # eth_sendRawTransaction, /injection/operation
+  script: 5       # run_code, trace_code, typecheck_*, simulate_operation
+  streaming: 5    # /monitor/*, mempool monitor
+  debug: 1        # debug_trace*, tez_replayBlock
+
+cache_max_entries: 10000
+
+chains:
+  tezos:
+    networks:
+      mainnet:
+        nodes:
+          - name: enterprise
+            url: "http://10.0.0.1:8732"
+          - name: defiant
+            url: "http://10.0.0.2:8732"
+            archive: true
+      ghostnet:
+        nodes:
+          - name: reliant
+            url: "http://10.0.0.3:8732"
+  etherlink:
+    networks:
+      mainnet:
+        nodes:
+          - name: voyager
+            url: "http://10.0.0.4:8545"
+          - name: excelsior
+            url: "http://10.0.0.5:8545"
+            archive: true
+      testnet:
+        nodes:
+          - name: discovery
+            url: "http://10.0.0.6:8545"
