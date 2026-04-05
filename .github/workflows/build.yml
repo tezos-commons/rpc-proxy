@@ -27,3 +27,10 @@ jobs:
         with:
           name: rpc-proxy-linux-${{ matrix.goarch }}
           path: rpc-proxy-linux-${{ matrix.goarch }}
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build docs image
+        run: docker build -t rpc-proxy-docs ./docs_website

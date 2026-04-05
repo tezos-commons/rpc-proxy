@@ -1,0 +1,36 @@
+.toc {
+  font-size: 0.8rem;
+}
+
+.title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.list {
+  list-style: none;
+}
+
+.link {
+  display: block;
+  padding: 0.2rem 0;
+  color: var(--text-muted);
+  transition: color 0.15s;
+  line-height: 1.4;
+}
+
+.link:hover {
+  color: var(--text-secondary);
+}
+
+.nested {
+  padding-left: 0.75rem;
+}
+
+.active {
+  color: var(--accent);
+}
