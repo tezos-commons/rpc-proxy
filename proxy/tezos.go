@@ -2,17 +2,43 @@ package proxy
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/tezos-commons/rpc-proxy/balancer"
 	"github.com/tezos-commons/rpc-proxy/cache"
 	"github.com/tezos-commons/rpc-proxy/log"
 	"github.com/tezos-commons/rpc-proxy/metrics"
 	"github.com/tezos-commons/rpc-proxy/tracker"
 	"github.com/valyala/fasthttp"
+	"golang.org/x/sync/singleflight"
 )
+
+// packDataCache is a global, generation-independent cache for pack_data responses.
+// pack_data is a pure function: same (data, type) input always produces the same
+// packed output regardless of block height or network, so we cache it forever
+// and share across all Tezos networks.
+var (
+	packDataEntries = cache.NewShardMap[*cache.Entry]()
+	packDataFlights singleflight.Group
+	packDataSuffix  = []byte("/helpers/scripts/pack_data")
+)
+
+const packDataMaxEntries = 50_000
+
+func isPackData(upstreamPath []byte) bool {
+	return bytes.HasSuffix(upstreamPath, packDataSuffix)
+}
+
+func packDataKey(body []byte) string {
+	h := xxhash.Sum64(body)
+	var k [8]byte
+	binary.LittleEndian.PutUint64(k[:], h)
+	return string(k[:])
+}
 
 var tezosClient = &fasthttp.Client{
 	MaxConnsPerHost:     8192,
@@ -68,6 +94,39 @@ func serveCachedEntry(ctx *fasthttp.RequestCtx, e *cache.Entry) {
 
 func handleTezos(ctx *fasthttp.RequestCtx, bal *balancer.Balancer, nc *cache.NetworkCache, network string, upstreamPath []byte, cacheable bool, archiveOnly bool, fallbacks []string, m *metrics.Metrics, logger *log.Logger) {
 	m.RecordRequest()
+
+	// pack_data: global cache, no generation, shared across all networks
+	if isPackData(upstreamPath) {
+		pdKey := packDataKey(ctx.PostBody())
+
+		// Cache hit
+		if e, ok := packDataEntries.Load(pdKey); ok {
+			m.RecordCacheHit()
+			serveCachedEntry(ctx, e)
+			return
+		}
+
+		// Singleflight + forward
+		v, _, _ := packDataFlights.Do(pdKey, func() (any, error) {
+			reqData := captureTezosRequest(ctx, upstreamPath)
+			return doTezosForward(bal, &reqData, false, m, logger)
+		})
+		if e, _ := v.(*cache.Entry); e != nil {
+			if e.Status >= 200 && e.Status < 300 && len(e.Body) <= 512*1024 && packDataEntries.Len() < packDataMaxEntries {
+				packDataEntries.Store(pdKey, e)
+			}
+			serveCachedEntry(ctx, e)
+			return
+		}
+
+		if tezosDirectFallback(ctx, fallbacks, upstreamPath, logger) {
+			return
+		}
+		m.RecordError()
+		ctx.SetStatusCode(fasthttp.StatusBadGateway)
+		ctx.SetBodyString("upstream error")
+		return
+	}
 
 	// Cache lookup
 	var cacheKey string
