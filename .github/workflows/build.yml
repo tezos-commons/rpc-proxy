@@ -30,7 +30,18 @@ jobs:
 
   docs:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      packages: write
     steps:
       - uses: actions/checkout@v4
-      - name: Build docs image
-        run: docker build -t rpc-proxy-docs ./docs_website
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./docs_website
+          push: true
+          tags: ghcr.io/${{ github.repository }}-docs:latest
