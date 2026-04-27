@@ -404,6 +404,12 @@ func doDirectTezosRequest(ctx *fasthttp.RequestCtx, node *tracker.NodeStatus, up
 		return err
 	}
 
+	// Retry on another node if the prevalidator is down — the operation was
+	// not injected, so it's safe to retry.
+	if resp.StatusCode() == 500 && bytes.Contains(resp.Body(), prevalidatorNotRunning) {
+		return errPrevalidatorDown
+	}
+
 	// Write response directly to ctx — fasthttp copies internally via SetBody,
 	// so it's safe even though resp is released after this function returns.
 	ctx.SetStatusCode(resp.StatusCode())
@@ -473,8 +479,11 @@ func tezosDirectFallback(ctx *fasthttp.RequestCtx, fallbacks []string, upstreamP
 	return false
 }
 
+var prevalidatorNotRunning = []byte("Prevalidator is not running")
+
 type errType struct{}
 
 func (errType) Error() string { return "no healthy node" }
 
 var errNoHealthyNode = errType{}
+var errPrevalidatorDown = fmt.Errorf("prevalidator not running")

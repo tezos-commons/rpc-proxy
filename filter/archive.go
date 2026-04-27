@@ -58,6 +58,7 @@ var evmBlockTagIndex = map[string]int{
 	"eth_getUncleCountByBlockNumber":            0,
 	"eth_getUncleByBlockNumberAndIndex":         0,
 	"eth_getTransactionByBlockNumberAndIndex":   0,
+	"eth_getBlockReceipts":                      0,
 	"eth_feeHistory":                            1,
 }
 

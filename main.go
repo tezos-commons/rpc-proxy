@@ -55,6 +55,7 @@ func main() {
 
 func runServe(configPath string) error {
 	logger := log.New()
+	logger.Info("rpc-proxy starting")
 
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -207,7 +208,19 @@ func runServe(configPath string) error {
 	// Serve on the inherited/created listener
 	go server.Serve(ln.(net.Listener))
 
-	// Wait for SIGINT/SIGTERM (shutdown) — SIGUSR2 (upgrade) is handled by tableflip
+	// Handle SIGUSR2 for zero-downtime upgrades
+	sigUSR2 := make(chan os.Signal, 1)
+	signal.Notify(sigUSR2, syscall.SIGUSR2)
+	go func() {
+		for range sigUSR2 {
+			logger.Info("SIGUSR2 received, upgrading...")
+			if err := upg.Upgrade(); err != nil {
+				logger.Error(fmt.Sprintf("Upgrade failed: %s", log.Err(err)))
+			}
+		}
+	}()
+
+	// Wait for SIGINT/SIGTERM (shutdown) or tableflip exit (upgrade complete)
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
